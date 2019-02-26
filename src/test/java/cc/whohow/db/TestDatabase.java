@@ -43,7 +43,7 @@ public class TestDatabase {
     }
 
     @Test
-    public void testTable() throws Exception {
+    public void testDump() throws Exception {
         Database database = new Database(dataSource);
         new DatabaseDumper(database, "social", null).dump(System.out);
     }

@@ -85,22 +85,18 @@ public class DatabaseScanner implements Callable<JsonNode> {
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         try {
             List<TableScanner> scanners = getTableScanners();
+            ArrayNode stats = JsonNodeFactory.instance.arrayNode();
             if (executor == null) {
-                ArrayNode stats = JsonNodeFactory.instance.arrayNode();
                 for (TableScanner scanner : scanners) {
                     stats.add(scanner.call());
                 }
-                result.set("stats", stats);
             } else {
-                List<Future<JsonNode>> futures = executor.invokeAll(scanners);
-                ArrayNode stats = JsonNodeFactory.instance.arrayNode();
-                for (Future<JsonNode> future : futures) {
+                for (Future<JsonNode> future : executor.invokeAll(scanners)) {
                     stats.add(future.get());
                 }
-                result.set("stats", stats);
             }
+            result.set("stats", stats);
         } catch (Exception e) {
-            e.printStackTrace();
             result.put("error", e.getMessage());
         }
         return result;

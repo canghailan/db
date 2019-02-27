@@ -1,5 +1,6 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
 
+import cc.whohow.db.Predicates;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -15,21 +16,24 @@ import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
-public class DatabaseScanner implements Callable<JsonNode> {
-    private final Database database;
-    private final ExecutorService executor;
+public class JdbcScanner implements Callable<JsonNode> {
+    private final Rdbms rdbms;
+    private ExecutorService executor;
     private Predicate<JsonNode> catalogFilter = Predicates::all;
     private Predicate<JsonNode> schemaFilter = Predicates::all;
     private Predicate<JsonNode> tableFilter = Predicates::all;
     private BiPredicate<JsonNode, JsonNode> rowFilter = Predicates::all;
-    private BiConsumer<JsonNode, JsonNode> consumer = DatabaseScanner::ignore;
+    private BiConsumer<JsonNode, JsonNode> consumer = JdbcScanner::ignore;
 
-    public DatabaseScanner(Database database, ExecutorService executor) {
-        this.database = database;
-        this.executor = executor;
+    public JdbcScanner(Rdbms rdbms) {
+        this.rdbms = rdbms;
     }
 
     private static <T1, T2> void ignore(T1 a, T2 b) {
+    }
+
+    public void setExecutor(ExecutorService executor) {
+        this.executor = executor;
     }
 
     public Predicate<JsonNode> getCatalogFilter() {
@@ -96,7 +100,7 @@ public class DatabaseScanner implements Callable<JsonNode> {
 
     private List<TableScanner> getTableScanners() throws SQLException {
         List<TableScanner> result = new ArrayList<>();
-        ArrayNode catalogs = database.getCatalogs();
+        ArrayNode catalogs = rdbms.getCatalogs();
         if (catalogs.size() == 0) {
             catalogs = JsonNodeFactory.instance.arrayNode(1);
             catalogs.addNull();
@@ -104,7 +108,7 @@ public class DatabaseScanner implements Callable<JsonNode> {
         for (JsonNode catalog : catalogs) {
             if (catalog.isNull() || catalogFilter.test(catalog)) {
                 String c = catalog.path("TABLE_CAT").textValue();
-                ArrayNode schemas = database.getSchemas(c);
+                ArrayNode schemas = rdbms.getSchemas(c);
                 if (schemas.size() == 0) {
                     schemas = JsonNodeFactory.instance.arrayNode(1);
                     schemas.addNull();
@@ -112,10 +116,10 @@ public class DatabaseScanner implements Callable<JsonNode> {
                 for (JsonNode schema : schemas) {
                     if (schema.isNull() || schemaFilter.test(schema)) {
                         String s = catalog.path("TABLE_SCHEM").textValue();
-                        ArrayNode tables = database.getTables(c, s);
+                        ArrayNode tables = rdbms.getTables(c, s);
                         for (JsonNode table : tables) {
                             if (tableFilter.test(table)) {
-                                result.add(new TableScanner(database, table, rowFilter, consumer));
+                                result.add(new TableScanner(rdbms, table, rowFilter, consumer));
                             }
                         }
                     }
@@ -126,16 +130,16 @@ public class DatabaseScanner implements Callable<JsonNode> {
     }
 
     public static class TableScanner implements Callable<JsonNode> {
-        private final Database database;
+        private final Rdbms rdbms;
         private final JsonNode table;
         private final BiPredicate<JsonNode, JsonNode> rowFilter;
         private final BiConsumer<JsonNode, JsonNode> consumer;
 
-        public TableScanner(Database database,
+        public TableScanner(Rdbms rdbms,
                             JsonNode table,
                             BiPredicate<JsonNode, JsonNode> rowFilter,
                             BiConsumer<JsonNode, JsonNode> consumer) {
-            this.database = database;
+            this.rdbms = rdbms;
             this.table = table;
             this.rowFilter = rowFilter;
             this.consumer = consumer;
@@ -143,7 +147,7 @@ public class DatabaseScanner implements Callable<JsonNode> {
 
         @Override
         public JsonNode call() {
-            try (Rows rows = database.getRows(table)) {
+            try (Rows rows = rdbms.getRows(table)) {
                 int count = 0;
                 int accept = 0;
                 for (ObjectNode row : rows) {
@@ -159,7 +163,7 @@ public class DatabaseScanner implements Callable<JsonNode> {
                 result.put("accept", accept);
                 return result;
             } catch (SQLException e) {
-                throw new DatabaseException(e);
+                throw new JdbcException(e);
             }
         }
     }

@@ -1,4 +1,4 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
 
 import com.fasterxml.jackson.core.JsonEncoding;
 import com.fasterxml.jackson.core.JsonFactory;
@@ -16,14 +16,14 @@ import java.io.Writer;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-public class DatabaseDumper {
+public class JdbcDumper {
     private static final JsonFactory JSON_FACTORY = new ObjectMapper().getFactory();
-    private final Database database;
+    private final Rdbms rdbms;
     private final String catalog;
     private final String schema;
 
-    public DatabaseDumper(Database database, String catalog, String schema) {
-        this.database = database;
+    public JdbcDumper(Rdbms rdbms, String catalog, String schema) {
+        this.rdbms = rdbms;
         this.catalog = catalog;
         this.schema = schema;
     }
@@ -51,13 +51,13 @@ public class DatabaseDumper {
     public JsonNode dump(JsonGenerator json) throws SQLException, IOException {
         json.setPrettyPrinter(new DumpPrettyPrinter());
 
-        JsonNode tables = database.getTables(catalog, schema);
-        try (Connection connection = database.getDataSource().getConnection()) {
+        JsonNode tables = rdbms.getTables(catalog, schema);
+        try (Connection connection = rdbms.getDataSource().getConnection()) {
             json.writeStartObject();
             for (JsonNode table : tables) {
                 json.writeFieldName(table.path("TABLE_NAME").textValue());
                 json.writeStartArray();
-                try (Rows query = database.getRows(connection, table)) {
+                try (Rows query = rdbms.getRows(connection, table)) {
                     for (ObjectNode row : query) {
                         json.writeTree(row);
                     }

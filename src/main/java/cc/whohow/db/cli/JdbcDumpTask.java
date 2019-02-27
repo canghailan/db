@@ -1,8 +1,8 @@
 package cc.whohow.db.cli;
 
 import cc.whohow.db.CloseRunnable;
-import cc.whohow.db.Database;
-import cc.whohow.db.DatabaseDumper;
+import cc.whohow.db.rdbms.Rdbms;
+import cc.whohow.db.rdbms.JdbcDumper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -10,27 +10,27 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.OutputStream;
 
-public class DatabaseDumpTask implements Task {
+public class JdbcDumpTask implements Task {
     private final JsonNode configuration;
     private CloseRunnable closeRunnable = CloseRunnable.empty();
 
-    public DatabaseDumpTask(JsonNode configuration) {
+    public JdbcDumpTask(JsonNode configuration) {
         this.configuration = configuration;
     }
 
     @Override
     public JsonNode call() throws Exception {
-        return newDatabaseDumper().dump(newOutput());
+        return newDumper().dump(newOutput());
     }
 
     private OutputStream newOutput() throws FileNotFoundException {
         String output = configuration.path("output").asText("output.txt");
         OutputStream stream = new FileOutputStream(output);
-        closeRunnable.compose(stream);
+        closeRunnable = closeRunnable.andThen(stream);
         return stream;
     }
 
-    private DatabaseDumper newDatabaseDumper() {
+    private JdbcDumper newDumper() {
         JsonNode db = configuration.path("db");
 
         HikariDataSource dataSource = new HikariDataSource();
@@ -38,11 +38,11 @@ public class DatabaseDumpTask implements Task {
         dataSource.setUsername(db.path("username").textValue());
         dataSource.setPassword(db.path("password").textValue());
         dataSource.setMaximumPoolSize(db.path("max").asInt(1));
-        closeRunnable = closeRunnable.andThen(dataSource);
+        closeRunnable = closeRunnable.compose(dataSource);
 
         String catalog = db.path("catalog").textValue();
         String schema = db.path("schema").textValue();
-        return new DatabaseDumper(new Database(dataSource), catalog, schema);
+        return new JdbcDumper(new Rdbms(dataSource), catalog, schema);
     }
 
     @Override

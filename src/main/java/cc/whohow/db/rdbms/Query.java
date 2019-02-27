@@ -1,4 +1,6 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
+
+import cc.whohow.db.CloseRunnable;
 
 import javax.sql.DataSource;
 import java.sql.Connection;

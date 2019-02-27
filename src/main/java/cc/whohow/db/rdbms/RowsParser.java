@@ -1,4 +1,4 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
 
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.core.base.ParserMinimalBase;
@@ -34,7 +34,7 @@ public class RowsParser extends ParserMinimalBase {
                     .createRootContext(0, 0, null);
         } catch (SQLException e) {
             closeRunnable.run();
-            throw new DatabaseException(e);
+            throw new JdbcException(e);
         }
     }
 

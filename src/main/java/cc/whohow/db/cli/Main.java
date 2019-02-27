@@ -28,9 +28,9 @@ public class Main {
     private static Task newTask(JsonNode configuration) {
         switch (configuration.path("task").asText("")) {
             case "scan":
-                return new DatabaseScanTask(configuration);
+                return new JdbcScanTask(configuration);
             case "dump":
-                return new DatabaseDumpTask(configuration);
+                return new JdbcDumpTask(configuration);
             default:
                 throw new IllegalArgumentException(configuration.toString());
         }

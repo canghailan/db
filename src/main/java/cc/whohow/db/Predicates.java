@@ -6,17 +6,12 @@ import java.util.Collection;
 import java.util.Map;
 import java.util.Set;
 import java.util.Spliterators;
-import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public class Predicates {
-    public static BiPredicate<JsonNode, JsonNode> row(Predicate<JsonNode> matcher) {
-        return new RowMatcher(matcher);
-    }
-
     public static Predicate<JsonNode> include(String key, String include) {
         if (include == null || include.isEmpty()) {
             return Predicates::all;
@@ -25,7 +20,7 @@ public class Predicates {
     }
 
     public static Predicate<JsonNode> include(String key, Collection<String> include) {
-        return new JsonMatcher(key, include::contains);
+        return new JsonFilter(key, include::contains);
     }
 
     public static Predicate<JsonNode> exclude(String key, String exclude) {
@@ -41,7 +36,7 @@ public class Predicates {
     }
 
     public static Predicate<JsonNode> pattern(String key, Pattern pattern) {
-        return new JsonMatcher(key, pattern.asPredicate());
+        return new JsonFilter(key, pattern.asPredicate());
     }
 
     private static Set<String> asSet(String csv) {
@@ -59,11 +54,11 @@ public class Predicates {
         return true;
     }
 
-    private static class JsonMatcher implements Predicate<JsonNode> {
+    private static class JsonFilter implements Predicate<JsonNode> {
         private final String key;
         private final Predicate<String> predicate;
 
-        private JsonMatcher(String key, Predicate<String> predicate) {
+        private JsonFilter(String key, Predicate<String> predicate) {
             this.key = key;
             this.predicate = predicate;
         }
@@ -77,19 +72,6 @@ public class Predicates {
                     .map(Map.Entry::getValue)
                     .map(json -> json.asText(""))
                     .anyMatch(predicate);
-        }
-    }
-
-    private static class RowMatcher implements BiPredicate<JsonNode, JsonNode> {
-        private final Predicate<JsonNode> predicate;
-
-        private RowMatcher(Predicate<JsonNode> predicate) {
-            this.predicate = predicate;
-        }
-
-        @Override
-        public boolean test(JsonNode table, JsonNode row) {
-            return predicate.test(row);
         }
     }
 }

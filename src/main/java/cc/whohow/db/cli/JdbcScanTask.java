@@ -1,9 +1,12 @@
 package cc.whohow.db.cli;
 
 import cc.whohow.db.CloseRunnable;
-import cc.whohow.db.Database;
-import cc.whohow.db.DatabaseScanner;
+import cc.whohow.db.ExecutorCloser;
+import cc.whohow.db.rdbms.Rdbms;
+import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.Predicates;
+import cc.whohow.db.rdbms.RowFilter;
+import cc.whohow.db.rdbms.RowWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -18,31 +21,29 @@ import java.util.Spliterators;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
-public class DatabaseScanTask implements Task {
+public class JdbcScanTask implements Task {
     private final JsonNode configuration;
     private CloseRunnable closeRunnable = CloseRunnable.empty();
-    private ExecutorService executor;
-    private Writer output;
 
-    public DatabaseScanTask(JsonNode configuration) {
+    public JdbcScanTask(JsonNode configuration) {
         this.configuration = configuration;
     }
 
     @Override
     public JsonNode call() throws Exception {
-        output = newOutput();
-        executor = newExecutor();
-
-        List<DatabaseScanner> scanners = newDatabaseScanner();
+        List<JdbcScanner> scanners = newScanners();
+        ExecutorService executor = newExecutor();
         BiPredicate<JsonNode, JsonNode> rowFilter = newRowFilter();
-        for (DatabaseScanner scanner : scanners) {
+        BiConsumer<JsonNode, JsonNode> consumer = newConsumer();
+        for (JdbcScanner scanner : scanners) {
+            scanner.setExecutor(executor);
             scanner.setRowFilter(rowFilter);
-            scanner.setConsumer(this::write);
+            scanner.setConsumer(consumer);
         }
 
         List<Future<JsonNode>> futures = executor.invokeAll(scanners);
@@ -52,56 +53,57 @@ public class DatabaseScanTask implements Task {
             stats.add(future.get());
         }
 
-        output.flush();
-
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         result.set("stats", stats);
         return result;
     }
 
-    private Writer newOutput() throws FileNotFoundException {
+    private RowWriter newConsumer() throws FileNotFoundException {
         String output = configuration.path("output").asText("output.txt");
-        Writer writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(output), StandardCharsets.UTF_8));
-        closeRunnable.compose(writer);
-        return writer;
+        RowWriter rowWriter = new RowWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(
+                output), StandardCharsets.UTF_8)));
+        closeRunnable = closeRunnable.andThen(rowWriter);
+        return rowWriter;
+    }
+
+    private List<JdbcScanner> newScanners() {
+        JsonNode db = configuration.path("db");
+        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(db.fields(), 0), false)
+                .map(Map.Entry::getValue)
+                .map(this::newScanner)
+                .collect(Collectors.toList());
     }
 
     private ExecutorService newExecutor() {
         int worker = configuration.path("worker").asInt(1);
-        return Executors.newFixedThreadPool(worker);
+        ExecutorService executor = Executors.newFixedThreadPool(worker);
+        closeRunnable = closeRunnable.andThen(new ExecutorCloser(executor));
+        return executor;
     }
 
-    private List<DatabaseScanner> newDatabaseScanner() {
-        JsonNode db = configuration.path("db");
-        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(db.fields(), 0), false)
-                .map(Map.Entry::getValue)
-                .map(this::newDatabaseScanner)
-                .collect(Collectors.toList());
-    }
-
-    private DatabaseScanner newDatabaseScanner(JsonNode db) {
+    private JdbcScanner newScanner(JsonNode db) {
         HikariDataSource dataSource = new HikariDataSource();
         dataSource.setJdbcUrl(db.path("url").textValue());
         dataSource.setUsername(db.path("username").textValue());
         dataSource.setPassword(db.path("password").textValue());
         dataSource.setMaximumPoolSize(db.path("max").asInt(1));
-        closeRunnable = closeRunnable.andThen(dataSource);
+        closeRunnable = closeRunnable.compose(dataSource);
 
-        DatabaseScanner databaseScanner = new DatabaseScanner(new Database(dataSource), executor);
+        JdbcScanner jdbcScanner = new JdbcScanner(new Rdbms(dataSource));
 
         String catalog = db.path("catalog").textValue();
         if (catalog != null) {
-            databaseScanner.setCatalogFilter(Predicates.include("TABLE_CAT", catalog));
+            jdbcScanner.setCatalogFilter(Predicates.include("TABLE_CAT", catalog));
         }
         String schema = db.path("schema").textValue();
         if (schema != null) {
-            databaseScanner.setSchemaFilter(Predicates.include("TABLE_SCHEM", schema));
+            jdbcScanner.setSchemaFilter(Predicates.include("TABLE_SCHEM", schema));
         }
         String table = db.path("table").textValue();
         if (table != null) {
-            databaseScanner.setTableFilter(Predicates.include("TABLE_NAME", table));
+            jdbcScanner.setTableFilter(Predicates.include("TABLE_NAME", table));
         }
-        return databaseScanner;
+        return jdbcScanner;
     }
 
     private BiPredicate<JsonNode, JsonNode> newRowFilter() {
@@ -109,38 +111,18 @@ public class DatabaseScanTask implements Task {
         String key = rowFilter.path("key").textValue();
         switch (rowFilter.path("type").asText("")) {
             case "pattern":
-                return Predicates.row(Predicates.pattern(key, rowFilter.path("pattern").asText()));
+                return new RowFilter(Predicates.pattern(key, rowFilter.path("pattern").asText()));
             case "include":
-                return Predicates.row(Predicates.include(key, rowFilter.path("include").asText()));
+                return new RowFilter(Predicates.include(key, rowFilter.path("include").asText()));
             case "exclude":
-                return Predicates.row(Predicates.include(key, rowFilter.path("exclude").asText()));
+                return new RowFilter(Predicates.include(key, rowFilter.path("exclude").asText()));
             default:
                 throw new IllegalArgumentException();
         }
     }
 
-    private void write(JsonNode table, JsonNode row) {
-        String tableName = Database.getQualifiedName(
-                table.path("TABLE_CAT").textValue(),
-                table.path("TABLE_SCHEM").textValue(),
-                table.path("TABLE_NAME").textValue());
-        try {
-            output.write(tableName + "\t" + row + "\n");
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
-        }
-    }
-
     @Override
     public void close() throws Exception {
-        try {
-            if (executor != null) {
-                executor.shutdown();
-                executor.awaitTermination(1, TimeUnit.MINUTES);
-                executor = null;
-            }
-        } finally {
-            closeRunnable.run();
-        }
+        closeRunnable.run();
     }
 }

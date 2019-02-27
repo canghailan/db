@@ -1,4 +1,4 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -17,7 +17,7 @@ public class RowsIterator implements Iterator<ObjectNode> {
             this.resultSet = resultSet;
             this.resultSetMetaData = resultSet.getMetaData();
         } catch (SQLException e) {
-            throw new DatabaseException(e);
+            throw new JdbcException(e);
         }
     }
 
@@ -26,7 +26,7 @@ public class RowsIterator implements Iterator<ObjectNode> {
         try {
             return resultSet.next();
         } catch (SQLException e) {
-            throw new DatabaseException(e);
+            throw new JdbcException(e);
         }
     }
 
@@ -39,7 +39,7 @@ public class RowsIterator implements Iterator<ObjectNode> {
             }
             return row;
         } catch (SQLException e) {
-            throw new DatabaseException(e);
+            throw new JdbcException(e);
         }
     }
 }

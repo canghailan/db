@@ -1,4 +1,4 @@
-package cc.whohow.db;
+package cc.whohow.db.rdbms;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -11,10 +11,10 @@ import java.util.Objects;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class Database {
+public class Rdbms {
     private final DataSource dataSource;
 
-    public Database(DataSource dataSource) {
+    public Rdbms(DataSource dataSource) {
         this.dataSource = dataSource;
     }
 

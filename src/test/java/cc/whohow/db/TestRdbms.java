@@ -1,5 +1,8 @@
 package cc.whohow.db;
 
+import cc.whohow.db.rdbms.Rdbms;
+import cc.whohow.db.rdbms.JdbcDumper;
+import cc.whohow.db.rdbms.JdbcScanner;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
@@ -7,13 +10,14 @@ import org.junit.Test;
 
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
-public class TestDatabase {
+public class TestRdbms {
     private static Properties properties;
     private static HikariDataSource dataSource;
 
@@ -38,32 +42,32 @@ public class TestDatabase {
 
     @Test
     public void test() throws Exception {
-        Database database = new Database(dataSource);
-        System.out.println(database.getTables());
+        Rdbms rdbms = new Rdbms(dataSource);
+        System.out.println(rdbms.getTables());
     }
 
     @Test
     public void testDump() throws Exception {
-        Database database = new Database(dataSource);
-        new DatabaseDumper(database, "social", null).dump(System.out);
+        Rdbms rdbms = new Rdbms(dataSource);
+        new JdbcDumper(rdbms, "social", null).dump(System.out);
     }
 
     @Test
     public void testScan() throws Exception {
-        Database database = new Database(dataSource);
+        Rdbms rdbms = new Rdbms(dataSource);
         ExecutorService executor = new ThreadPoolExecutor(5, 5, 1, TimeUnit.MINUTES, new LinkedBlockingQueue<>());
-        DatabaseScanner databaseScanner = new DatabaseScanner(database, executor);
-        databaseScanner.setCatalogFilter(
+        JdbcScanner scanner = new JdbcScanner(rdbms);
+        scanner.setExecutor(executor);
+        scanner.setCatalogFilter(
                 (catalog) -> "social".equals(catalog.path("TABLE_CAT").textValue()));
-        databaseScanner.setConsumer((table, row) -> {
+        scanner.setConsumer((table, row) -> {
             if (row.path("id").asText().contains("2")) {
                 System.out.println(Thread.currentThread());
                 System.out.println(table.path("TABLE_NAME").textValue());
                 System.out.println(row);
             }
         });
-        System.out.println(databaseScanner.call());
-        executor.shutdown();
-        executor.awaitTermination(1, TimeUnit.MINUTES);
+        System.out.println(scanner.call());
+        new ExecutorCloser(executor, Duration.ofMinutes(5)).close();
     }
 }

@@ -82,21 +82,21 @@ public class Database {
     }
 
     public Rows query(String sql, Object... parameters) throws SQLException {
-        return new Query(sql, parameters).executeQuery(dataSource);
+        return new SimpleQuery(sql, parameters).executeQuery(dataSource);
     }
 
     public Rows query(Connection connection, String sql, Object... parameters) throws SQLException {
-        return new Query(sql, parameters).executeQuery(connection);
+        return new SimpleQuery(sql, parameters).executeQuery(connection);
     }
 
-    public Query getRowsQuery(JsonNode table) {
+    private Query getRowsQuery(JsonNode table) {
         return getRowsQuery(getQualifiedName(
                 table.path("TABLE_CAT").textValue(),
                 table.path("TABLE_SCHEM").textValue(),
                 table.path("TABLE_NAME").textValue()));
     }
 
-    public Query getRowsQuery(String table) {
-        return new Query("SELECT * FROM " + table);
+    private Query getRowsQuery(String table) {
+        return new SimpleQuery("SELECT * FROM " + table);
     }
 }

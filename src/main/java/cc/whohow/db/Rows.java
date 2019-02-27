@@ -28,7 +28,7 @@ public class Rows implements Iterable<ObjectNode>, AutoCloseable {
     }
 
     public Stream<ObjectNode> stream() {
-        return StreamSupport.stream(spliterator(), false);
+        return StreamSupport.stream(spliterator(), false).onClose(this::close);
     }
 
     public RowsParser parser() {

@@ -18,23 +18,15 @@ import java.util.function.Predicate;
 public class DatabaseScanner implements Callable<JsonNode> {
     private final Database database;
     private final ExecutorService executor;
-    private Predicate<JsonNode> catalogFilter = DatabaseScanner::all;
-    private Predicate<JsonNode> schemaFilter = DatabaseScanner::all;
-    private Predicate<JsonNode> tableFilter = DatabaseScanner::all;
-    private BiPredicate<JsonNode, JsonNode> rowFilter = DatabaseScanner::all;
+    private Predicate<JsonNode> catalogFilter = Predicates::all;
+    private Predicate<JsonNode> schemaFilter = Predicates::all;
+    private Predicate<JsonNode> tableFilter = Predicates::all;
+    private BiPredicate<JsonNode, JsonNode> rowFilter = Predicates::all;
     private BiConsumer<JsonNode, JsonNode> consumer = DatabaseScanner::ignore;
 
     public DatabaseScanner(Database database, ExecutorService executor) {
         this.database = database;
         this.executor = executor;
-    }
-
-    private static <T> boolean all(T a) {
-        return true;
-    }
-
-    private static <T1, T2> boolean all(T1 a, T2 b) {
-        return true;
     }
 
     private static <T1, T2> void ignore(T1 a, T2 b) {
@@ -151,9 +143,7 @@ public class DatabaseScanner implements Callable<JsonNode> {
 
         @Override
         public JsonNode call() {
-            Rows rows = null;
-            try {
-                rows = database.getRows(table);
+            try (Rows rows = database.getRows(table)) {
                 int count = 0;
                 int accept = 0;
                 for (ObjectNode row : rows) {
@@ -169,10 +159,6 @@ public class DatabaseScanner implements Callable<JsonNode> {
                 result.put("accept", accept);
                 return result;
             } catch (SQLException e) {
-                if (rows != null) {
-                    rows.close();
-                }
-                e.printStackTrace();
                 throw new DatabaseException(e);
             }
         }

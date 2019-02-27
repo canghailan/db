@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.JsonGenerator;
 import com.fasterxml.jackson.core.PrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.File;
@@ -27,25 +28,27 @@ public class DatabaseDumper {
         this.schema = schema;
     }
 
-    public void dump(File file) throws SQLException, IOException {
+    public JsonNode dump(File file) throws SQLException, IOException {
         try (JsonGenerator json = JSON_FACTORY.createGenerator(file, JsonEncoding.UTF8)) {
-            dump(json);
+            return dump(json);
         }
     }
 
-    public void dump(OutputStream stream) throws SQLException, IOException {
+    public JsonNode dump(OutputStream stream) throws SQLException, IOException {
         try (JsonGenerator json = JSON_FACTORY.createGenerator(stream)) {
-            dump(json);
+            json.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+            return dump(json);
         }
     }
 
-    public void dump(Writer writer) throws SQLException, IOException {
+    public JsonNode dump(Writer writer) throws SQLException, IOException {
         try (JsonGenerator json = JSON_FACTORY.createGenerator(writer)) {
-            dump(json);
+            json.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
+            return dump(json);
         }
     }
 
-    public void dump(JsonGenerator json) throws SQLException, IOException {
+    public JsonNode dump(JsonGenerator json) throws SQLException, IOException {
         json.setPrettyPrinter(new DumpPrettyPrinter());
 
         JsonNode tables = database.getTables(catalog, schema);
@@ -63,6 +66,8 @@ public class DatabaseDumper {
             }
             json.writeEndObject();
         }
+
+        return JsonNodeFactory.instance.objectNode();
     }
 
     private static class DumpPrettyPrinter implements PrettyPrinter {

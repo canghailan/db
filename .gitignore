@@ -1,4 +1,6 @@
 .idea/
 target/
 *.iml
+*.yml
+*.txt
 jdbc.properties

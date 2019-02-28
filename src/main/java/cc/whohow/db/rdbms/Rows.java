@@ -1,5 +1,6 @@
 package cc.whohow.db.rdbms;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -31,14 +32,10 @@ public class Rows implements Iterable<ObjectNode>, AutoCloseable {
         return StreamSupport.stream(spliterator(), false).onClose(this::close);
     }
 
-    public RowsParser parser() {
-        return new RowsParser(resultSet, closeRunnable);
-    }
-
     public ArrayNode toJSON() {
         try {
             ArrayNode array = JsonNodeFactory.instance.arrayNode();
-            for (ObjectNode e : this) {
+            for (JsonNode e : this) {
                 array.add(e);
             }
             return array;

@@ -1,8 +1,8 @@
 package cc.whohow.db;
 
-import cc.whohow.db.rdbms.Rdbms;
 import cc.whohow.db.rdbms.JdbcDumper;
 import cc.whohow.db.rdbms.JdbcScanner;
+import cc.whohow.db.rdbms.Rdbms;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;

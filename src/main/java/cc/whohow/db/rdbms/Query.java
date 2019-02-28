@@ -8,15 +8,8 @@ import java.sql.SQLException;
 
 public interface Query {
     default Rows executeQuery(DataSource dataSource) throws SQLException {
-        CloseRunnable closeRunnable = CloseRunnable.empty();
-        try {
-            Connection connection = dataSource.getConnection();
-            closeRunnable = closeRunnable.compose(connection);
-            return executeQuery(connection, closeRunnable);
-        } catch (SQLException e) {
-            closeRunnable.run();
-            throw e;
-        }
+        Connection connection = dataSource.getConnection();
+        return executeQuery(connection, CloseRunnable.of(connection));
     }
 
     default Rows executeQuery(Connection connection) throws SQLException {

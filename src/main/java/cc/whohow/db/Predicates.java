@@ -66,7 +66,11 @@ public class Predicates {
         @Override
         public boolean test(JsonNode node) {
             if (key != null) {
-                return predicate.test(node.path(key).asText());
+                if (key.startsWith("/")) {
+                    return predicate.test(node.at(key).asText());
+                } else {
+                    return predicate.test(node.path(key).asText());
+                }
             }
             return StreamSupport.stream(Spliterators.spliteratorUnknownSize(node.fields(), 0), false)
                     .map(Map.Entry::getValue)

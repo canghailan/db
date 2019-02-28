@@ -6,6 +6,7 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Arrays;
 
 public class SimpleQuery implements Query {
     private final String sql;
@@ -18,11 +19,12 @@ public class SimpleQuery implements Query {
 
     @Override
     public Rows executeQuery(Connection connection, CloseRunnable closeRunnable) throws SQLException {
+        closeRunnable = CloseRunnable.builder(closeRunnable);
         try {
             PreparedStatement statement = connection.prepareStatement(sql,
                     ResultSet.TYPE_FORWARD_ONLY,
                     ResultSet.CONCUR_READ_ONLY);
-            closeRunnable = closeRunnable.compose(statement);
+            closeRunnable.compose(statement);
             if (connection.getMetaData().getDriverName().toLowerCase().contains("mysql")) {
                 statement.setFetchSize(Integer.MIN_VALUE);
             } else {
@@ -33,7 +35,7 @@ public class SimpleQuery implements Query {
             }
 
             ResultSet resultSet = statement.executeQuery();
-            closeRunnable = closeRunnable.compose(resultSet);
+            closeRunnable.compose(resultSet);
 
             return new Rows(resultSet, closeRunnable);
         } catch (SQLException e) {
@@ -44,6 +46,6 @@ public class SimpleQuery implements Query {
 
     @Override
     public String toString() {
-        return sql + "\n" + parameters;
+        return sql + "\n" + Arrays.toString(parameters);
     }
 }

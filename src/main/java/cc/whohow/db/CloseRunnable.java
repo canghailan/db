@@ -3,6 +3,14 @@ package cc.whohow.db;
 public abstract class CloseRunnable implements AutoCloseable, Runnable {
     private static final CloseRunnable EMPTY = new Empty();
 
+    public static CloseRunnable builder() {
+        return builder(empty());
+    }
+
+    public static CloseRunnable builder(CloseRunnable closeRunnable) {
+        return new Builder(closeRunnable == null ? empty() : closeRunnable);
+    }
+
     public static CloseRunnable empty() {
         return EMPTY;
     }
@@ -93,6 +101,43 @@ public abstract class CloseRunnable implements AutoCloseable, Runnable {
                 runnable2.run();
             } catch (Throwable ignore) {
             }
+        }
+    }
+
+    private static class Builder extends CloseRunnable {
+        private CloseRunnable closeRunnable;
+
+        public Builder(CloseRunnable closeRunnable) {
+            this.closeRunnable = closeRunnable;
+        }
+
+        @Override
+        public CloseRunnable compose(Runnable runnable) {
+            closeRunnable = closeRunnable.compose(runnable);
+            return this;
+        }
+
+        @Override
+        public CloseRunnable compose(AutoCloseable closeable) {
+            closeRunnable = closeRunnable.compose(closeable);
+            return this;
+        }
+
+        @Override
+        public CloseRunnable andThen(Runnable runnable) {
+            closeRunnable = closeRunnable.andThen(runnable);
+            return this;
+        }
+
+        @Override
+        public CloseRunnable andThen(AutoCloseable closeable) {
+            closeRunnable = closeRunnable.andThen(closeable);
+            return this;
+        }
+
+        @Override
+        public void run() {
+            closeRunnable.run();
         }
     }
 }

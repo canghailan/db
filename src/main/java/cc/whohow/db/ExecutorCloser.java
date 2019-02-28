@@ -22,7 +22,7 @@ public class ExecutorCloser implements AutoCloseable {
         executor.shutdown();
         try {
             if (executor.awaitTermination(waitTimeout.toNanos(), TimeUnit.NANOSECONDS)) {
-                 return;
+                return;
             }
             executor.shutdownNow();
             executor.awaitTermination(waitTimeout.toNanos(), TimeUnit.NANOSECONDS);

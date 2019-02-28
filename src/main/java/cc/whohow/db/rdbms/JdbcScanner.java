@@ -1,6 +1,7 @@
 package cc.whohow.db.rdbms;
 
 import cc.whohow.db.Predicates;
+import cc.whohow.db.SecondFilter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -64,6 +65,10 @@ public class JdbcScanner implements Callable<JsonNode> {
         return rowFilter;
     }
 
+    public void setRowFilter(Predicate<JsonNode> rowFilter) {
+        this.rowFilter = new SecondFilter(rowFilter);
+    }
+
     public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
         this.rowFilter = rowFilter;
     }
@@ -93,6 +98,7 @@ public class JdbcScanner implements Callable<JsonNode> {
             }
             result.set("stats", stats);
         } catch (Exception e) {
+            e.printStackTrace();
             result.put("error", e.getMessage());
         }
         return result;

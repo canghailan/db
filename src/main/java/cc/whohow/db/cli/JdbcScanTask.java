@@ -2,10 +2,10 @@ package cc.whohow.db.cli;
 
 import cc.whohow.db.CloseRunnable;
 import cc.whohow.db.ExecutorCloser;
-import cc.whohow.db.rdbms.Rdbms;
-import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.Predicates;
-import cc.whohow.db.rdbms.RowFilter;
+import cc.whohow.db.SecondFilter;
+import cc.whohow.db.rdbms.JdbcScanner;
+import cc.whohow.db.rdbms.Rdbms;
 import cc.whohow.db.rdbms.RowWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
@@ -13,7 +13,10 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zaxxer.hikari.HikariDataSource;
 
-import java.io.*;
+import java.io.BufferedWriter;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -28,7 +31,7 @@ import java.util.stream.StreamSupport;
 
 public class JdbcScanTask implements Task {
     private final JsonNode configuration;
-    private CloseRunnable closeRunnable = CloseRunnable.empty();
+    private CloseRunnable closeRunnable = CloseRunnable.builder();
 
     public JdbcScanTask(JsonNode configuration) {
         this.configuration = configuration;
@@ -37,15 +40,17 @@ public class JdbcScanTask implements Task {
     @Override
     public JsonNode call() throws Exception {
         List<JdbcScanner> scanners = newScanners();
-        ExecutorService executor = newExecutor();
+        ExecutorService workerExecutor = newWorkerExecutor();
         BiPredicate<JsonNode, JsonNode> rowFilter = newRowFilter();
         BiConsumer<JsonNode, JsonNode> consumer = newConsumer();
         for (JdbcScanner scanner : scanners) {
-            scanner.setExecutor(executor);
+            scanner.setExecutor(workerExecutor);
             scanner.setRowFilter(rowFilter);
             scanner.setConsumer(consumer);
         }
 
+        ExecutorService executor = Executors.newFixedThreadPool(scanners.size());
+        closeRunnable.andThen(new ExecutorCloser(executor));
         List<Future<JsonNode>> futures = executor.invokeAll(scanners);
 
         ArrayNode stats = JsonNodeFactory.instance.arrayNode();
@@ -62,7 +67,7 @@ public class JdbcScanTask implements Task {
         String output = configuration.path("output").asText("output.txt");
         RowWriter rowWriter = new RowWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(
                 output), StandardCharsets.UTF_8)));
-        closeRunnable = closeRunnable.andThen(rowWriter);
+        closeRunnable.andThen(rowWriter);
         return rowWriter;
     }
 
@@ -74,10 +79,10 @@ public class JdbcScanTask implements Task {
                 .collect(Collectors.toList());
     }
 
-    private ExecutorService newExecutor() {
+    private ExecutorService newWorkerExecutor() {
         int worker = configuration.path("worker").asInt(1);
         ExecutorService executor = Executors.newFixedThreadPool(worker);
-        closeRunnable = closeRunnable.andThen(new ExecutorCloser(executor));
+        closeRunnable.andThen(new ExecutorCloser(executor));
         return executor;
     }
 
@@ -87,7 +92,7 @@ public class JdbcScanTask implements Task {
         dataSource.setUsername(db.path("username").textValue());
         dataSource.setPassword(db.path("password").textValue());
         dataSource.setMaximumPoolSize(db.path("max").asInt(1));
-        closeRunnable = closeRunnable.compose(dataSource);
+        closeRunnable.compose(dataSource);
 
         JdbcScanner jdbcScanner = new JdbcScanner(new Rdbms(dataSource));
 
@@ -111,11 +116,11 @@ public class JdbcScanTask implements Task {
         String key = rowFilter.path("key").textValue();
         switch (rowFilter.path("type").asText("")) {
             case "pattern":
-                return new RowFilter(Predicates.pattern(key, rowFilter.path("pattern").asText()));
+                return new SecondFilter(Predicates.pattern(key, rowFilter.path("pattern").asText()));
             case "include":
-                return new RowFilter(Predicates.include(key, rowFilter.path("include").asText()));
+                return new SecondFilter(Predicates.include(key, rowFilter.path("include").asText()));
             case "exclude":
-                return new RowFilter(Predicates.include(key, rowFilter.path("exclude").asText()));
+                return new SecondFilter(Predicates.include(key, rowFilter.path("exclude").asText()));
             default:
                 throw new IllegalArgumentException();
         }

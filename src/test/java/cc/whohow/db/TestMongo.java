@@ -43,7 +43,7 @@ public class TestMongo {
 
     @Test
     public void testDateTime() {
-        System.out.println(DateTime.isDateTime("2017-06-13T"));
-        System.out.println(DateTime.isDateTime("2017-06-13T15:41:59.000+0800"));
+        System.out.println(ISO_8601.is("2017-06-13T"));
+        System.out.println(ISO_8601.is("2017-06-13T15:41:59.000+0800"));
     }
 }

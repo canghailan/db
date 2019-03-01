@@ -57,12 +57,12 @@ public class MongoScanner implements Callable<JsonNode> {
         return documentFilter;
     }
 
-    public void setDocumentFilter(BiPredicate<JsonNode, JsonNode> documentFilter) {
-        this.documentFilter = documentFilter;
-    }
-
     public void setDocumentFilter(Predicate<JsonNode> documentFilter) {
         this.documentFilter = new SecondFilter(documentFilter);
+    }
+
+    public void setDocumentFilter(BiPredicate<JsonNode, JsonNode> documentFilter) {
+        this.documentFilter = documentFilter;
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {

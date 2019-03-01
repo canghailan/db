@@ -2,6 +2,7 @@ package cc.whohow.db;
 
 import cc.whohow.db.rdbms.JdbcDumper;
 import cc.whohow.db.rdbms.JdbcScanner;
+import cc.whohow.db.rdbms.JdbcSynchronizer;
 import cc.whohow.db.rdbms.Rdbms;
 import com.zaxxer.hikari.HikariDataSource;
 import org.junit.AfterClass;
@@ -69,5 +70,15 @@ public class TestRdbms {
         });
         System.out.println(scanner.call());
         new ExecutorCloser(executor, Duration.ofMinutes(5)).close();
+    }
+
+    @Test
+    public void testSync() throws Exception {
+//        Rdbms rdbms = new Rdbms(dataSource);
+//        String select = "select * from s_comment_old";
+//        String update = "insert into s_comment_old_copy1 " +
+//                "(id, app_key, uri, uid, user_id, reply_uid, comment_time, comment_mark) values " +
+//                "(:id, :app_key, :uri, :uid, :user_id, :reply_uid, :comment_time, :comment_mark)";
+//        System.out.println(new JdbcSynchronizer(rdbms, select, rdbms, update, null).call());
     }
 }

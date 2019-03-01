@@ -1,5 +1,6 @@
-package cc.whohow.db.rdbms;
+package cc.whohow.db.rdbms.query;
 
+import cc.whohow.db.rdbms.JdbcException;
 import com.fasterxml.jackson.core.*;
 import com.fasterxml.jackson.core.base.ParserMinimalBase;
 import com.fasterxml.jackson.core.json.JsonReadContext;

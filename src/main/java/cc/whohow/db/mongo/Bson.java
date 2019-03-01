@@ -1,5 +1,6 @@
 package cc.whohow.db.mongo;
 
+import cc.whohow.db.ISO_8601;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -8,8 +9,6 @@ import org.bson.BsonDbPointer;
 import org.bson.BsonJavaScriptWithScope;
 import org.bson.BsonValue;
 
-import java.time.Instant;
-import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Map;
 
@@ -47,8 +46,7 @@ public class Bson {
                 return JsonNodeFactory.instance.booleanNode(
                         bson.asBoolean().getValue());
             case DATE_TIME:
-                return JsonNodeFactory.instance.textNode(
-                        DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(Instant.ofEpochMilli(bson.asDateTime().getValue())));
+                return JsonNodeFactory.instance.textNode(ISO_8601.format(bson.asDateTime().getValue()));
             case NULL:
                 return JsonNodeFactory.instance.nullNode();
             case REGULAR_EXPRESSION:
@@ -73,7 +71,7 @@ public class Bson {
             case INT32:
                 return JsonNodeFactory.instance.numberNode(bson.asInt32().intValue());
             case TIMESTAMP:
-                return JsonNodeFactory.instance.numberNode(bson.asTimestamp().getValue());
+                return JsonNodeFactory.instance.textNode(ISO_8601.format(bson.asTimestamp().getValue()));
             case INT64:
                 return JsonNodeFactory.instance.numberNode(bson.asInt64().getValue());
             case DECIMAL128:

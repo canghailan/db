@@ -1,4 +1,4 @@
-package cc.whohow.db.rdbms;
+package cc.whohow.db.rdbms.query;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;

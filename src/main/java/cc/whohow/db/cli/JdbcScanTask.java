@@ -6,7 +6,7 @@ import cc.whohow.db.Predicates;
 import cc.whohow.db.SecondFilter;
 import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.rdbms.Rdbms;
-import cc.whohow.db.rdbms.RowWriter;
+import cc.whohow.db.rdbms.query.RowWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;

@@ -1,5 +1,8 @@
 package cc.whohow.db.rdbms;
 
+import cc.whohow.db.rdbms.query.Query;
+import cc.whohow.db.rdbms.query.Rows;
+import cc.whohow.db.rdbms.query.SimpleQuery;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 

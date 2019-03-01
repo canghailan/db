@@ -1,5 +1,6 @@
-package cc.whohow.db.rdbms;
+package cc.whohow.db.rdbms.query;
 
+import cc.whohow.db.rdbms.Rdbms;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.io.Closeable;

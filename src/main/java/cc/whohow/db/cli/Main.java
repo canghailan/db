@@ -11,6 +11,8 @@ public class Main {
     public static void main(String[] args) throws Exception {
         try (Task task = newTask(getConfiguration(getConfOption(args)))) {
             System.out.println(task.call());
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
 
@@ -31,6 +33,8 @@ public class Main {
                 return new JdbcScanTask(configuration);
             case "dump":
                 return new JdbcDumpTask(configuration);
+            case "sync":
+                return new JdbcSynchronizeTask(configuration);
             default:
                 throw new IllegalArgumentException(configuration.toString());
         }

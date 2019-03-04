@@ -80,7 +80,7 @@ public class JdbcTypeFactory {
             case STRING: {
                 String value = json.textValue();
                 if (ISO_8601.is(value)) {
-                    return ISO_8601.parse(value);
+                    return Date.from(ISO_8601.parse(value).toInstant());
                 }
                 return value;
             }

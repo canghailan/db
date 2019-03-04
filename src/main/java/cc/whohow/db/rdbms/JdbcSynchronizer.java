@@ -10,20 +10,21 @@ import javax.sql.DataSource;
 import java.sql.*;
 import java.util.*;
 import java.util.concurrent.Callable;
+import java.util.stream.Collectors;
 
 public class JdbcSynchronizer implements Callable<JsonNode> {
     private Map<String, DataSource> dataSources;
-    private Map<String, JdbcSynchronizeQuery> queries;
+    private Map<String, StatefulQuery> queries;
     private ObjectNode context;
     private CloseRunnable closeRunnable = CloseRunnable.builder();
 
-    public JdbcSynchronizer(Map<String, DataSource> dataSources, List<JdbcSynchronizeQuery> queryList, ObjectNode context) {
+    public JdbcSynchronizer(Map<String, DataSource> dataSources, List<StatefulQuery> queryList, ObjectNode context) {
         if (context == null) {
             context = JsonNodeFactory.instance.objectNode();
         }
         this.dataSources = dataSources;
         this.queries = new LinkedHashMap<>();
-        for (JdbcSynchronizeQuery query : queryList) {
+        for (StatefulQuery query : queryList) {
             if (query.getName() == null) {
                 query.setName(UUID.randomUUID().toString());
             }
@@ -38,17 +39,20 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
     public JsonNode call() throws Exception {
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         try {
-           for (JdbcSynchronizeQuery query : queries.values()) {
-               run(query);
-           }
+            for (StatefulQuery query : queries.values()) {
+                run(query);
+                System.out.println(context);
+            }
         } catch (Exception e) {
-            e.printStackTrace();
             result.put("error", e.getMessage());
+            throw e;
+        } finally {
+            closeRunnable.run();
         }
         return result;
     }
 
-    private void run(JdbcSynchronizeQuery query) throws SQLException {
+    private void run(StatefulQuery query) throws SQLException {
         if (query.isUpdate()) {
             runUpdate(query);
         } else {
@@ -56,7 +60,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         }
     }
 
-    private void runQuery(JdbcSynchronizeQuery query) throws SQLException {
+    private void runQuery(StatefulQuery query) throws SQLException {
         if (query.isStreaming()) {
             return;
         }
@@ -65,7 +69,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         context.set(query.getName(), namedQuery.executeQuery(dataSource).toJSON());
     }
 
-    private void runUpdate(JdbcSynchronizeQuery query) throws SQLException {
+    private void runUpdate(StatefulQuery query) throws SQLException {
         if (query.getWith() != null && !query.getWith().isEmpty()) {
             runUpdateWith(query);
             return;
@@ -74,24 +78,65 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         DataSource dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL())) {
                 namedQuery.setParameters(statement);
                 statement.executeUpdate();
                 connection.commit();
             } catch (Throwable e) {
                 connection.rollback();
+                throw e;
             }
         }
     }
 
-    private void runUpdateWith(JdbcSynchronizeQuery query) {
-        List<ResultSet> resultSets = new ArrayList<>(query.getWith().size());
-        for (ResultSet resultSet : resultSets) {
+    private void runUpdateWith(StatefulQuery query) throws SQLException {
+        if (query.getWith().size() > 1) {
+            throw new UnsupportedOperationException("TODO");
+        }
+        DataSource dataSource = dataSources.get(query.getDataSource());
+        NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
 
+        List<StatefulQuery> queryList = query.getWith().stream()
+                .map(queries::get)
+                .collect(Collectors.toList());
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+            try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL())) {
+                ResultSet resultSet = withQuery(queryList.get(0));
+                ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+                int[] indexMap = indexMapForQuery(namedQuery, resultSetMetaData);
+
+                int count = 0;
+                while (resultSet.next()) {
+                    namedQuery.setParameters(statement);
+                    for (int param = 0; param < indexMap.length; param++) {
+                        int column = indexMap[param];
+                        if (column < 0) {
+                            continue;
+                        }
+                        statement.setObject(param + 1,
+                                resultSet.getObject(column + 1), resultSetMetaData.getColumnType(column + 1));
+                    }
+                    statement.addBatch();
+                    count++;
+                    if (count % 1000 == 0) {
+                        statement.executeBatch();
+                    }
+                }
+                if (count % 1000 != 0) {
+                    statement.executeBatch();
+                }
+
+                connection.commit();
+            } catch (Throwable e) {
+                connection.rollback();
+                throw e;
+            }
         }
     }
 
-    private ResultSet withQuery(JdbcSynchronizeQuery query) throws SQLException {
+    private ResultSet withQuery(StatefulQuery query) throws SQLException {
         DataSource dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         Connection connection = dataSource.getConnection();
@@ -101,5 +146,15 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         ResultSet resultSet = statement.executeQuery();
         closeRunnable.compose(resultSet);
         return resultSet;
+    }
+
+    private int[] indexMapForQuery(NamedQuery query, ResultSetMetaData resultSetMetaData) throws SQLException {
+        List<String> names = new ArrayList<>(resultSetMetaData.getColumnCount());
+        for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
+            names.add(resultSetMetaData.getColumnLabel(i));
+        }
+        return query.getParameterNames().stream()
+                .mapToInt(names::indexOf)
+                .toArray();
     }
 }

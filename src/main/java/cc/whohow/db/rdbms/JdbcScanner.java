@@ -66,12 +66,12 @@ public class JdbcScanner implements Callable<JsonNode> {
         return rowFilter;
     }
 
-    public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
-        this.rowFilter = rowFilter;
-    }
-
     public void setRowFilter(Predicate<JsonNode> rowFilter) {
         this.rowFilter = new SecondFilter(rowFilter);
+    }
+
+    public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
+        this.rowFilter = rowFilter;
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {
@@ -83,7 +83,7 @@ public class JdbcScanner implements Callable<JsonNode> {
     }
 
     @Override
-    public JsonNode call() {
+    public JsonNode call() throws Exception {
         ObjectNode result = JsonNodeFactory.instance.objectNode();
         try {
             List<TableScanner> scanners = getTableScanners();
@@ -99,8 +99,8 @@ public class JdbcScanner implements Callable<JsonNode> {
             }
             result.set("stats", stats);
         } catch (Exception e) {
-            e.printStackTrace();
             result.put("error", e.getMessage());
+            throw e;
         }
         return result;
     }
@@ -153,7 +153,7 @@ public class JdbcScanner implements Callable<JsonNode> {
         }
 
         @Override
-        public JsonNode call() {
+        public JsonNode call() throws Exception {
             try (Rows rows = rdbms.getRows(table)) {
                 int count = 0;
                 int accept = 0;
@@ -169,8 +169,6 @@ public class JdbcScanner implements Callable<JsonNode> {
                 result.put("count", count);
                 result.put("accept", accept);
                 return result;
-            } catch (SQLException e) {
-                throw new JdbcException(e);
             }
         }
     }

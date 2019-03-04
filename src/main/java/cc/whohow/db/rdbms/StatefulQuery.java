@@ -2,7 +2,7 @@ package cc.whohow.db.rdbms;
 
 import java.util.List;
 
-public class JdbcSynchronizeQuery {
+public class StatefulQuery {
     private String name;
     private String dataSource;
     private boolean update;

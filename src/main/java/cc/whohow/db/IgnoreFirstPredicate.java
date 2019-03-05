@@ -5,10 +5,10 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
-public class SecondFilter implements BiPredicate<JsonNode, JsonNode> {
+public class IgnoreFirstPredicate implements BiPredicate<JsonNode, JsonNode> {
     private final Predicate<JsonNode> predicate;
 
-    public SecondFilter(Predicate<JsonNode> predicate) {
+    public IgnoreFirstPredicate(Predicate<JsonNode> predicate) {
         this.predicate = predicate;
     }
 

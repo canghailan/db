@@ -3,7 +3,7 @@ package cc.whohow.db.cli;
 import cc.whohow.db.CloseRunnable;
 import cc.whohow.db.ExecutorCloser;
 import cc.whohow.db.Predicates;
-import cc.whohow.db.SecondFilter;
+import cc.whohow.db.IgnoreFirstPredicate;
 import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.rdbms.Rdbms;
 import cc.whohow.db.rdbms.query.RowWriter;
@@ -116,11 +116,11 @@ public class JdbcScanTask implements Task {
         String key = rowFilter.path("key").textValue();
         switch (rowFilter.path("type").asText("")) {
             case "pattern":
-                return new SecondFilter(Predicates.pattern(key, rowFilter.path("pattern").asText()));
+                return new IgnoreFirstPredicate(Predicates.pattern(key, rowFilter.path("pattern").asText()));
             case "include":
-                return new SecondFilter(Predicates.include(key, rowFilter.path("include").asText()));
+                return new IgnoreFirstPredicate(Predicates.include(key, rowFilter.path("include").asText()));
             case "exclude":
-                return new SecondFilter(Predicates.include(key, rowFilter.path("exclude").asText()));
+                return new IgnoreFirstPredicate(Predicates.include(key, rowFilter.path("exclude").asText()));
             default:
                 throw new IllegalArgumentException();
         }

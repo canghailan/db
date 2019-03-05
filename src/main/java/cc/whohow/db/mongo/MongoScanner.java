@@ -1,7 +1,7 @@
 package cc.whohow.db.mongo;
 
 import cc.whohow.db.Predicates;
-import cc.whohow.db.SecondFilter;
+import cc.whohow.db.IgnoreFirstPredicate;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -62,7 +62,7 @@ public class MongoScanner implements Callable<JsonNode> {
     }
 
     public void setDocumentFilter(Predicate<JsonNode> documentFilter) {
-        this.documentFilter = new SecondFilter(documentFilter);
+        this.documentFilter = new IgnoreFirstPredicate(documentFilter);
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {

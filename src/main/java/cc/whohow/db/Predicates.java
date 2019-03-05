@@ -20,7 +20,7 @@ public class Predicates {
     }
 
     public static Predicate<JsonNode> include(String key, Collection<String> include) {
-        return new JsonFilter(key, include::contains);
+        return new JsonPredicate(key, include::contains);
     }
 
     public static Predicate<JsonNode> exclude(String key, String exclude) {
@@ -36,7 +36,7 @@ public class Predicates {
     }
 
     public static Predicate<JsonNode> pattern(String key, Pattern pattern) {
-        return new JsonFilter(key, pattern.asPredicate());
+        return new JsonPredicate(key, pattern.asPredicate());
     }
 
     private static Set<String> asSet(String csv) {
@@ -54,11 +54,11 @@ public class Predicates {
         return true;
     }
 
-    private static class JsonFilter implements Predicate<JsonNode> {
+    private static class JsonPredicate implements Predicate<JsonNode> {
         private final String key;
         private final Predicate<String> predicate;
 
-        private JsonFilter(String key, Predicate<String> predicate) {
+        private JsonPredicate(String key, Predicate<String> predicate) {
             this.key = key;
             this.predicate = predicate;
         }

@@ -3,4 +3,5 @@ target/
 *.iml
 *.yml
 *.txt
+*.sql
 *.properties

@@ -2,8 +2,8 @@ package cc.whohow.db.cli;
 
 import cc.whohow.db.CloseRunnable;
 import cc.whohow.db.ExecutorCloser;
-import cc.whohow.db.Predicates;
 import cc.whohow.db.IgnoreFirstPredicate;
+import cc.whohow.db.Predicates;
 import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.rdbms.Rdbms;
 import cc.whohow.db.rdbms.query.RowWriter;
@@ -13,10 +13,8 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zaxxer.hikari.HikariDataSource;
 
-import java.io.BufferedWriter;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.OutputStreamWriter;
+import javax.sql.DataSource;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -30,8 +28,8 @@ import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
 public class JdbcScanTask implements Task {
-    private final JsonNode configuration;
-    private CloseRunnable closeRunnable = CloseRunnable.builder();
+    protected final JsonNode configuration;
+    protected CloseRunnable closeRunnable = CloseRunnable.builder();
 
     public JdbcScanTask(JsonNode configuration) {
         this.configuration = configuration;
@@ -39,10 +37,10 @@ public class JdbcScanTask implements Task {
 
     @Override
     public JsonNode call() throws Exception {
-        List<JdbcScanner> scanners = newScanners();
-        ExecutorService workerExecutor = newWorkerExecutor();
-        BiPredicate<JsonNode, JsonNode> rowFilter = newRowFilter();
-        BiConsumer<JsonNode, JsonNode> consumer = newConsumer();
+        List<JdbcScanner> scanners = buildScanners();
+        ExecutorService workerExecutor = buildWorkerExecutor();
+        BiPredicate<JsonNode, JsonNode> rowFilter = buildRowFilter();
+        BiConsumer<JsonNode, JsonNode> consumer = buildConsumer();
         for (JdbcScanner scanner : scanners) {
             scanner.setExecutor(workerExecutor);
             scanner.setRowFilter(rowFilter);
@@ -63,38 +61,16 @@ public class JdbcScanTask implements Task {
         return result;
     }
 
-    private RowWriter newConsumer() throws FileNotFoundException {
-        String output = configuration.path("output").asText("output.txt");
-        RowWriter rowWriter = new RowWriter(new BufferedWriter(new OutputStreamWriter(new FileOutputStream(
-                output), StandardCharsets.UTF_8)));
-        closeRunnable.andThen(rowWriter);
-        return rowWriter;
-    }
-
-    private List<JdbcScanner> newScanners() {
+    protected List<JdbcScanner> buildScanners() {
         JsonNode db = configuration.path("db");
         return StreamSupport.stream(Spliterators.spliteratorUnknownSize(db.fields(), 0), false)
                 .map(Map.Entry::getValue)
-                .map(this::newScanner)
+                .map(this::buildScanner)
                 .collect(Collectors.toList());
     }
 
-    private ExecutorService newWorkerExecutor() {
-        int worker = configuration.path("worker").asInt(1);
-        ExecutorService executor = Executors.newFixedThreadPool(worker);
-        closeRunnable.andThen(new ExecutorCloser(executor));
-        return executor;
-    }
-
-    private JdbcScanner newScanner(JsonNode db) {
-        HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl(db.path("url").textValue());
-        dataSource.setUsername(db.path("username").textValue());
-        dataSource.setPassword(db.path("password").textValue());
-        dataSource.setMaximumPoolSize(db.path("max").asInt(1));
-        closeRunnable.compose(dataSource);
-
-        JdbcScanner jdbcScanner = new JdbcScanner(new Rdbms(dataSource));
+    protected JdbcScanner buildScanner(JsonNode db) {
+        JdbcScanner jdbcScanner = new JdbcScanner(new Rdbms(buildDataSource(db)));
 
         String catalog = db.path("catalog").textValue();
         if (catalog != null) {
@@ -111,7 +87,20 @@ public class JdbcScanTask implements Task {
         return jdbcScanner;
     }
 
-    private BiPredicate<JsonNode, JsonNode> newRowFilter() {
+    protected DataSource buildDataSource(JsonNode db) {
+        HikariDataSource dataSource = new DataSourceBuilder().apply(db);
+        closeRunnable.compose(dataSource);
+        return dataSource;
+    }
+
+    protected ExecutorService buildWorkerExecutor() {
+        int worker = configuration.path("worker").asInt(1);
+        ExecutorService executor = Executors.newFixedThreadPool(worker);
+        closeRunnable.andThen(new ExecutorCloser(executor));
+        return executor;
+    }
+
+    protected BiPredicate<JsonNode, JsonNode> buildRowFilter() {
         JsonNode rowFilter = configuration.path("rowFilter");
         String key = rowFilter.path("key").textValue();
         switch (rowFilter.path("type").asText("")) {
@@ -124,6 +113,17 @@ public class JdbcScanTask implements Task {
             default:
                 throw new IllegalArgumentException();
         }
+    }
+
+    protected BiConsumer<JsonNode, JsonNode> buildConsumer() throws FileNotFoundException {
+        RowWriter rowWriter = new RowWriter(new BufferedWriter(new OutputStreamWriter(buildOutput(), StandardCharsets.UTF_8)));
+        closeRunnable.andThen(rowWriter);
+        return rowWriter;
+    }
+
+    protected OutputStream buildOutput() throws FileNotFoundException {
+        String output = configuration.path("output").asText("output.txt");
+        return new FileOutputStream(output);
     }
 
     @Override

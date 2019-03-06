@@ -17,8 +17,8 @@ import java.util.List;
 import java.util.Map;
 
 public class JdbcSynchronizeTask implements Task {
-    private final JsonNode configuration;
-    private CloseRunnable closeRunnable = CloseRunnable.builder();
+    protected final JsonNode configuration;
+    protected CloseRunnable closeRunnable = CloseRunnable.builder();
 
     public JdbcSynchronizeTask(JsonNode configuration) {
         this.configuration = configuration;
@@ -26,46 +26,34 @@ public class JdbcSynchronizeTask implements Task {
 
     @Override
     public JsonNode call() throws Exception {
-        Map<String, DataSource> dataSources = newDataSources();
-        ObjectNode context = newContext();
-        List<StatefulQuery> queryList = newQueryList();
-
-        try {
-            return new JdbcSynchronizer(dataSources, queryList, context).call();
-        } finally {
-            closeRunnable.run();
-        }
+        return new JdbcSynchronizer(buildDataSources(), newQueryList(), newContext()).call();
     }
 
-    private Map<String, DataSource> newDataSources() {
+    protected Map<String, DataSource> buildDataSources() {
         JsonNode db = configuration.path("db");
 
         Map<String, DataSource> dataSources = new LinkedHashMap<>();
         Iterator<Map.Entry<String, JsonNode>> iterator = db.fields();
         while (iterator.hasNext()) {
             Map.Entry<String, JsonNode> e = iterator.next();
-            dataSources.put(e.getKey(), newDataSource(e.getValue()));
+            dataSources.put(e.getKey(), buildDataSource(e.getValue()));
         }
         return dataSources;
     }
 
-    private DataSource newDataSource(JsonNode db) {
-        HikariDataSource dataSource = new HikariDataSource();
-        dataSource.setJdbcUrl(db.path("url").textValue());
-        dataSource.setUsername(db.path("username").textValue());
-        dataSource.setPassword(db.path("password").textValue());
-        dataSource.setMaximumPoolSize(db.path("max").asInt(1));
+    protected DataSource buildDataSource(JsonNode db) {
+        HikariDataSource dataSource = new DataSourceBuilder().apply(db);
         closeRunnable.compose(dataSource);
         return dataSource;
     }
 
-    private List<StatefulQuery> newQueryList() {
+    protected List<StatefulQuery> newQueryList() {
         JsonNode query = configuration.path("query");
         return new ObjectMapper().convertValue(query, new TypeReference<List<StatefulQuery>>() {
         });
     }
 
-    private ObjectNode newContext() {
+    protected ObjectNode newContext() {
         JsonNode context = configuration.path("context");
         if (context.isObject()) {
             return (ObjectNode) context;

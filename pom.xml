@@ -6,7 +6,7 @@
 
     <groupId>cc.whohow</groupId>
     <artifactId>db-kit</artifactId>
-    <version>1.0.0</version>
+    <version>1.0.1</version>
 
     <build>
         <plugins>
@@ -88,4 +88,11 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <distributionManagement>
+        <repository>
+            <id>yitong</id>
+            <url>http://nexus.dev.yitong.com/repository/maven-releases/</url>
+        </repository>
+    </distributionManagement>
 </project>

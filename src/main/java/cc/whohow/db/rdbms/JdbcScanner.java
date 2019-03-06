@@ -66,12 +66,12 @@ public class JdbcScanner implements Callable<JsonNode> {
         return rowFilter;
     }
 
-    public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
-        this.rowFilter = rowFilter;
-    }
-
     public void setRowFilter(Predicate<JsonNode> rowFilter) {
         this.rowFilter = new IgnoreFirstPredicate(rowFilter);
+    }
+
+    public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
+        this.rowFilter = rowFilter;
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {

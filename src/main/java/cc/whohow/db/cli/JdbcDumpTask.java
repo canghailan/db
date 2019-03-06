@@ -7,8 +7,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
+import java.io.IOException;
 import java.io.OutputStream;
 
 public class JdbcDumpTask implements Task {
@@ -42,7 +42,7 @@ public class JdbcDumpTask implements Task {
         return configuration.path("db").path("schema").textValue();
     }
 
-    protected OutputStream buildOutput() throws FileNotFoundException {
+    protected OutputStream buildOutput() throws IOException {
         String output = configuration.path("output").asText("output.txt");
         OutputStream stream = new FileOutputStream(output);
         closeRunnable.andThen(stream);

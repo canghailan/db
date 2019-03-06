@@ -14,7 +14,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zaxxer.hikari.HikariDataSource;
 
 import javax.sql.DataSource;
-import java.io.*;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -115,13 +118,13 @@ public class JdbcScanTask implements Task {
         }
     }
 
-    protected BiConsumer<JsonNode, JsonNode> buildConsumer() throws FileNotFoundException {
-        RowWriter rowWriter = new RowWriter(new BufferedWriter(new OutputStreamWriter(buildOutput(), StandardCharsets.UTF_8)));
+    protected BiConsumer<JsonNode, JsonNode> buildConsumer() throws IOException {
+        RowWriter rowWriter = new RowWriter(new OutputStreamWriter(buildOutput(), StandardCharsets.UTF_8));
         closeRunnable.andThen(rowWriter);
         return rowWriter;
     }
 
-    protected OutputStream buildOutput() throws FileNotFoundException {
+    protected OutputStream buildOutput() throws IOException {
         String output = configuration.path("output").asText("output.txt");
         return new FileOutputStream(output);
     }

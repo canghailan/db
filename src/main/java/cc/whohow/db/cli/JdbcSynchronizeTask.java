@@ -26,7 +26,7 @@ public class JdbcSynchronizeTask implements Task {
 
     @Override
     public JsonNode call() throws Exception {
-        return new JdbcSynchronizer(buildDataSources(), newQueryList(), newContext()).call();
+        return new JdbcSynchronizer(buildDataSources(), buildQueryList(), buildContext()).call();
     }
 
     protected Map<String, DataSource> buildDataSources() {
@@ -47,13 +47,13 @@ public class JdbcSynchronizeTask implements Task {
         return dataSource;
     }
 
-    protected List<StatefulQuery> newQueryList() {
+    protected List<StatefulQuery> buildQueryList() {
         JsonNode query = configuration.path("query");
         return new ObjectMapper().convertValue(query, new TypeReference<List<StatefulQuery>>() {
         });
     }
 
-    protected ObjectNode newContext() {
+    protected ObjectNode buildContext() {
         JsonNode context = configuration.path("context");
         if (context.isObject()) {
             return (ObjectNode) context;

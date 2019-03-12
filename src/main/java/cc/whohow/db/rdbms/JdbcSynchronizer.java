@@ -1,10 +1,15 @@
 package cc.whohow.db.rdbms;
 
 import cc.whohow.db.CloseRunnable;
+import cc.whohow.db.Json;
 import cc.whohow.db.rdbms.query.NamedQuery;
+import cc.whohow.db.rdbms.query.Rows;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.sql.DataSource;
 import java.sql.*;
@@ -13,16 +18,21 @@ import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
 public class JdbcSynchronizer implements Callable<JsonNode> {
-    private Map<String, DataSource> dataSources;
+    private static final Logger LOG = LoggerFactory.getLogger(JdbcSynchronizer.class);
+
+    private Map<String, Rdbms> dataSources;
     private Map<String, StatefulQuery> queries;
     private ObjectNode context;
     private CloseRunnable closeRunnable = CloseRunnable.builder();
 
     public JdbcSynchronizer(Map<String, DataSource> dataSources, List<StatefulQuery> queryList, ObjectNode context) {
-        if (context == null) {
+        if (context == null || context.isNull() || context.isMissingNode()) {
             context = JsonNodeFactory.instance.objectNode();
         }
-        this.dataSources = dataSources;
+        this.dataSources = new LinkedHashMap<>();
+        for (Map.Entry<String, DataSource> e : dataSources.entrySet()) {
+            this.dataSources.put(e.getKey(), new Rdbms(e.getValue()));
+        }
         this.queries = new LinkedHashMap<>();
         for (StatefulQuery query : queryList) {
             if (query.getName() == null) {
@@ -37,19 +47,20 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
 
     @Override
     public JsonNode call() throws Exception {
-        ObjectNode result = JsonNodeFactory.instance.objectNode();
         try {
             for (StatefulQuery query : queries.values()) {
+                LOG.debug("context:\n{}", context);
                 run(query);
-                System.out.println(context);
             }
-        } catch (Exception e) {
-            result.put("error", e.getMessage());
+            LOG.debug("context:\n{}", context);
+            return context;
+        } catch (Throwable e) {
+            LOG.error(e.getMessage(), e);
             throw e;
         } finally {
+            LOG.debug("close");
             closeRunnable.run();
         }
-        return result;
     }
 
     private void run(StatefulQuery query) throws SQLException {
@@ -64,23 +75,57 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         if (query.isStreaming()) {
             return;
         }
-        DataSource dataSource = dataSources.get(query.getDataSource());
+
+        Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        context.set(query.getName(), namedQuery.executeQuery(dataSource).toJSON());
+        LOG.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+
+        try (Connection connection = dataSource.getDataSource().getConnection()) {
+            try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL(),
+                    ResultSet.TYPE_FORWARD_ONLY,
+                    ResultSet.CONCUR_READ_ONLY)) {
+                statement.setFetchSize(dataSource.getFetchSize());
+                List<String> parameterNames = namedQuery.getParameterNames();
+                for (int i = 0; i < parameterNames.size(); i++) {
+                    statement.setString(i + 1, getAsString(parameterNames.get(i)));
+                }
+                try (ResultSet resultSet = statement.executeQuery()) {
+                    ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
+                    ArrayNode array = Json.newArray();
+                    while (resultSet.next()) {
+                        ObjectNode row = Json.newObject();
+                        for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
+                            row.put(resultSetMetaData.getColumnLabel(i), resultSet.getString(i));
+                        }
+                        array.add(row);
+                    }
+                    context.set(query.getName(), array);
+                }
+            }
+        }
+    }
+
+    private boolean isUpdateWith(StatefulQuery query) {
+        return !(query.getWith() == null || query.getWith().isEmpty());
     }
 
     private void runUpdate(StatefulQuery query) throws SQLException {
-        if (query.getWith() != null && !query.getWith().isEmpty()) {
+        if (isUpdateWith(query)) {
             runUpdateWith(query);
             return;
         }
 
-        DataSource dataSource = dataSources.get(query.getDataSource());
+        Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        try (Connection connection = dataSource.getConnection()) {
+        LOG.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+
+        try (Connection connection = dataSource.getDataSource().getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL())) {
-                namedQuery.setParameters(statement);
+                List<String> parameterNames = namedQuery.getParameterNames();
+                for (int i = 0; i < parameterNames.size(); i++) {
+                    statement.setString(i + 1, getAsString(parameterNames.get(i)));
+                }
                 statement.executeUpdate();
                 connection.commit();
             } catch (Throwable e) {
@@ -94,41 +139,57 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         if (query.getWith().size() > 1) {
             throw new UnsupportedOperationException("TODO");
         }
-        DataSource dataSource = dataSources.get(query.getDataSource());
-        NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
 
-        List<StatefulQuery> queryList = query.getWith().stream()
+        Rdbms dataSource = dataSources.get(query.getDataSource());
+        NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
+        LOG.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+
+        List<StatefulQuery> with = query.getWith().stream()
                 .map(queries::get)
                 .collect(Collectors.toList());
-        try (Connection connection = dataSource.getConnection()) {
+
+        List<String> contextParameters = namedQuery.getParameterNames().stream()
+                .map(this::getAsString)
+                .collect(Collectors.toList());
+        List<String> parameters = new ArrayList<>(contextParameters.size());
+
+        try (Connection connection = dataSource.getDataSource().getConnection()) {
             connection.setAutoCommit(false);
             try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL())) {
-                ResultSet resultSet = withQuery(queryList.get(0));
-                ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
-                int[] indexMap = indexMapForQuery(namedQuery, resultSetMetaData);
+                try (Rows rows = withQuery(with.get(0))) {
+                    ResultSet resultSet = rows.getResultSet();
+                    int[] parameterColumns = getParameterColumnIndexes(namedQuery, resultSet.getMetaData());
 
-                int count = 0;
-                while (resultSet.next()) {
-                    namedQuery.setParameters(statement);
-                    for (int param = 0; param < indexMap.length; param++) {
-                        int column = indexMap[param];
-                        if (column < 0) {
-                            continue;
+                    int count = 0;
+                    while (resultSet.next()) {
+                        parameters.clear();
+                        for (int i = 0; i < parameterColumns.length; i++) {
+                            int c = parameterColumns[i];
+                            if (c > 0) {
+                                parameters.add(resultSet.getString(c));
+                            } else {
+                                parameters.add(contextParameters.get(i));
+                            }
                         }
-                        statement.setObject(param + 1,
-                                resultSet.getObject(column + 1), resultSetMetaData.getColumnType(column + 1));
+                        for (int i = 0; i < parameters.size(); i++) {
+                            statement.setString(i + 1, parameters.get(i));
+                        }
+                        LOG.debug("parameters: {}", parameters);
+
+                        statement.addBatch();
+                        count++;
+                        if (count % 1000 == 0) {
+                            LOG.debug("execute: {}", count);
+                            statement.executeBatch();
+                        }
                     }
-                    statement.addBatch();
-                    count++;
-                    if (count % 1000 == 0) {
+                    if (count % 1000 != 0) {
+                        LOG.debug("execute: {}", count);
                         statement.executeBatch();
                     }
-                }
-                if (count % 1000 != 0) {
-                    statement.executeBatch();
-                }
 
-                connection.commit();
+                    connection.commit();
+                }
             } catch (Throwable e) {
                 connection.rollback();
                 throw e;
@@ -136,25 +197,52 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
         }
     }
 
-    private ResultSet withQuery(StatefulQuery query) throws SQLException {
-        DataSource dataSource = dataSources.get(query.getDataSource());
+    private Rows withQuery(StatefulQuery query) throws SQLException {
+        Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        Connection connection = dataSource.getConnection();
-        closeRunnable.compose(connection);
-        PreparedStatement statement = namedQuery.prepareQuery(connection);
-        closeRunnable.compose(statement);
-        ResultSet resultSet = statement.executeQuery();
-        closeRunnable.compose(resultSet);
-        return resultSet;
+        LOG.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+
+        CloseRunnable closeRunnable = CloseRunnable.builder();
+        try {
+            Connection connection = dataSource.getDataSource().getConnection();
+            closeRunnable.compose(connection);
+
+            PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL(),
+                    ResultSet.TYPE_FORWARD_ONLY,
+                    ResultSet.CONCUR_READ_ONLY);
+            closeRunnable.compose(statement);
+            statement.setFetchSize(dataSource.getFetchSize());
+            List<String> parameterNames = namedQuery.getParameterNames();
+            for (int i = 0; i < parameterNames.size(); i++) {
+                statement.setString(i + 1, getAsString(parameterNames.get(i)));
+            }
+
+            ResultSet resultSet = statement.executeQuery();
+            closeRunnable.compose(resultSet);
+
+            return new Rows(resultSet, closeRunnable);
+        } catch (Throwable e) {
+            closeRunnable.run();
+            throw e;
+        }
     }
 
-    private int[] indexMapForQuery(NamedQuery query, ResultSetMetaData resultSetMetaData) throws SQLException {
-        List<String> names = new ArrayList<>(resultSetMetaData.getColumnCount());
+    private int[] getParameterColumnIndexes(NamedQuery query, ResultSetMetaData resultSetMetaData) throws SQLException {
+        Map<String, Integer> index = new HashMap<>(resultSetMetaData.getColumnCount());
         for (int i = 1; i <= resultSetMetaData.getColumnCount(); i++) {
-            names.add(resultSetMetaData.getColumnLabel(i));
+            index.put(resultSetMetaData.getColumnLabel(i), i);
         }
         return query.getParameterNames().stream()
-                .mapToInt(names::indexOf)
+                .map(index::get)
+                .mapToInt(i -> (i == null) ? -1 : i)
                 .toArray();
+    }
+
+    private String getAsString(String expression) {
+        return get(expression).asText(null);
+    }
+
+    private JsonNode get(String expression) {
+        return Json.get(context, expression);
     }
 }

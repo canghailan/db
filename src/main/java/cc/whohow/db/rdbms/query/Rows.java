@@ -23,6 +23,14 @@ public class Rows implements Iterable<ObjectNode>, AutoCloseable {
         this.closeRunnable = closeRunnable;
     }
 
+    public ResultSet getResultSet() {
+        return resultSet;
+    }
+
+    public Runnable getCloseRunnable() {
+        return closeRunnable;
+    }
+
     @Override
     public Iterator<ObjectNode> iterator() {
         return new RowsIterator(resultSet);

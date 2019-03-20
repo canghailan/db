@@ -180,14 +180,14 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
                         if (count % 1000 == 0) {
                             log.debug("execute: {}", count);
                             statement.executeBatch();
+                            connection.commit();
                         }
                     }
                     if (count % 1000 != 0) {
                         log.debug("execute: {}", count);
                         statement.executeBatch();
+                        connection.commit();
                     }
-
-                    connection.commit();
                 }
             } catch (Throwable e) {
                 connection.rollback();

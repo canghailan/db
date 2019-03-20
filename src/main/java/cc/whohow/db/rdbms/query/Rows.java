@@ -1,8 +1,8 @@
 package cc.whohow.db.rdbms.query;
 
+import cc.whohow.db.Json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.sql.ResultSet;
@@ -42,7 +42,7 @@ public class Rows implements Iterable<ObjectNode>, AutoCloseable {
 
     public ArrayNode toJSON() {
         try {
-            ArrayNode array = JsonNodeFactory.instance.arrayNode();
+            ArrayNode array = Json.newArray();
             for (JsonNode e : this) {
                 array.add(e);
             }

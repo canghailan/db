@@ -1,10 +1,10 @@
 package cc.whohow.db.rdbms;
 
 import cc.whohow.db.CloseRunnable;
+import cc.whohow.db.Json;
 import cc.whohow.db.rdbms.query.Rows;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import javax.sql.DataSource;
@@ -18,7 +18,7 @@ import java.util.stream.Stream;
 
 public class Rdbms {
     private final DataSource dataSource;
-    private final ObjectNode metadata = JsonNodeFactory.instance.objectNode();
+    private final ObjectNode metadata = Json.newObject();
 
     public Rdbms(DataSource dataSource) {
         this.dataSource = dataSource;
@@ -33,7 +33,7 @@ public class Rdbms {
     public String getType() throws SQLException {
         JsonNode type = metadata.path("type");
         if (type.isMissingNode()) {
-            synchronized (this){
+            synchronized (this) {
                 try (Connection connection = dataSource.getConnection()) {
                     String driverName = connection.getMetaData().getDriverName().toLowerCase();
                     if (driverName.contains("mysql")) {
@@ -51,7 +51,7 @@ public class Rdbms {
     public int getFetchSize() throws SQLException {
         JsonNode fetchSize = metadata.path("fetchSize");
         if (fetchSize.isMissingNode()) {
-            synchronized (this){
+            synchronized (this) {
                 if ("mysql".equalsIgnoreCase(getType())) {
                     metadata.put("fetchSize", Integer.MIN_VALUE);
                 } else {

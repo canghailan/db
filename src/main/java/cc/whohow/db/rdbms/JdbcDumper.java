@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +20,7 @@ import java.sql.Connection;
 import java.sql.SQLException;
 
 public class JdbcDumper {
+    private static final Logger log = LoggerFactory.getLogger(JdbcDumper.class);
     private static final JsonFactory JSON_FACTORY = new ObjectMapper().getFactory();
     private final Rdbms rdbms;
     private final String catalog;
@@ -56,7 +59,9 @@ public class JdbcDumper {
         try (Connection connection = rdbms.getDataSource().getConnection()) {
             json.writeStartObject();
             for (JsonNode table : tables) {
-                json.writeFieldName(table.path("TABLE_NAME").textValue());
+                String tableName = table.path("TABLE_NAME").textValue();
+                log.debug("dump {}", tableName);
+                json.writeFieldName(tableName);
                 json.writeStartArray();
                 try (Rows query = rdbms.getRows(connection, table)) {
                     for (ObjectNode row : query) {

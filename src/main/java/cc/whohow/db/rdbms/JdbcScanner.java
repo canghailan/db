@@ -1,12 +1,14 @@
 package cc.whohow.db.rdbms;
 
 import cc.whohow.db.IgnoreFirstPredicate;
+import cc.whohow.db.Json;
 import cc.whohow.db.Predicates;
 import cc.whohow.db.rdbms.query.Rows;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -19,6 +21,8 @@ import java.util.function.BiPredicate;
 import java.util.function.Predicate;
 
 public class JdbcScanner implements Callable<JsonNode> {
+    private static final Logger log = LoggerFactory.getLogger(JdbcScanner.class);
+
     private final Rdbms rdbms;
     private ExecutorService executor;
     private Predicate<JsonNode> catalogFilter = Predicates::all;
@@ -66,12 +70,12 @@ public class JdbcScanner implements Callable<JsonNode> {
         return rowFilter;
     }
 
-    public void setRowFilter(Predicate<JsonNode> rowFilter) {
-        this.rowFilter = new IgnoreFirstPredicate(rowFilter);
-    }
-
     public void setRowFilter(BiPredicate<JsonNode, JsonNode> rowFilter) {
         this.rowFilter = rowFilter;
+    }
+
+    public void setRowFilter(Predicate<JsonNode> rowFilter) {
+        this.rowFilter = new IgnoreFirstPredicate(rowFilter);
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {
@@ -84,10 +88,10 @@ public class JdbcScanner implements Callable<JsonNode> {
 
     @Override
     public JsonNode call() throws Exception {
-        ObjectNode result = JsonNodeFactory.instance.objectNode();
+        ObjectNode result = Json.newObject();
         try {
             List<TableScanner> scanners = getTableScanners();
-            ArrayNode stats = JsonNodeFactory.instance.arrayNode();
+            ArrayNode stats = Json.newArray();
             if (executor == null) {
                 for (TableScanner scanner : scanners) {
                     stats.add(scanner.call());
@@ -109,7 +113,7 @@ public class JdbcScanner implements Callable<JsonNode> {
         List<TableScanner> result = new ArrayList<>();
         ArrayNode catalogs = rdbms.getCatalogs();
         if (catalogs.size() == 0) {
-            catalogs = JsonNodeFactory.instance.arrayNode(1);
+            catalogs = Json.newArray();
             catalogs.addNull();
         }
         for (JsonNode catalog : catalogs) {
@@ -117,7 +121,7 @@ public class JdbcScanner implements Callable<JsonNode> {
                 String c = catalog.path("TABLE_CAT").textValue();
                 ArrayNode schemas = rdbms.getSchemas(c);
                 if (schemas.size() == 0) {
-                    schemas = JsonNodeFactory.instance.arrayNode(1);
+                    schemas = Json.newArray();
                     schemas.addNull();
                 }
                 for (JsonNode schema : schemas) {
@@ -154,6 +158,7 @@ public class JdbcScanner implements Callable<JsonNode> {
 
         @Override
         public JsonNode call() throws Exception {
+            log.debug("scan {}", table);
             try (Rows rows = rdbms.getRows(table)) {
                 int count = 0;
                 int accept = 0;
@@ -164,7 +169,7 @@ public class JdbcScanner implements Callable<JsonNode> {
                         consumer.accept(table, row);
                     }
                 }
-                ObjectNode result = JsonNodeFactory.instance.objectNode();
+                ObjectNode result = Json.newObject();
                 result.set("table", table);
                 result.put("count", count);
                 result.put("accept", accept);

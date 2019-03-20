@@ -1,15 +1,11 @@
 package cc.whohow.db.cli;
 
-import cc.whohow.db.CloseRunnable;
-import cc.whohow.db.ExecutorCloser;
-import cc.whohow.db.IgnoreFirstPredicate;
-import cc.whohow.db.Predicates;
+import cc.whohow.db.*;
 import cc.whohow.db.rdbms.JdbcScanner;
 import cc.whohow.db.rdbms.Rdbms;
 import cc.whohow.db.rdbms.query.RowWriter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -54,12 +50,12 @@ public class JdbcScanTask implements Task {
         closeRunnable.andThen(new ExecutorCloser(executor));
         List<Future<JsonNode>> futures = executor.invokeAll(scanners);
 
-        ArrayNode stats = JsonNodeFactory.instance.arrayNode();
+        ArrayNode stats = Json.newArray();
         for (Future<JsonNode> future : futures) {
             stats.add(future.get());
         }
 
-        ObjectNode result = JsonNodeFactory.instance.objectNode();
+        ObjectNode result = Json.newObject();
         result.set("stats", stats);
         return result;
     }

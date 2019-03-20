@@ -1,10 +1,10 @@
 package cc.whohow.db.mongo;
 
 import cc.whohow.db.IgnoreFirstPredicate;
+import cc.whohow.db.Json;
 import cc.whohow.db.Predicates;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.mongodb.MongoClient;
 import org.bson.BsonDocument;
@@ -57,12 +57,12 @@ public class MongoScanner implements Callable<JsonNode> {
         return documentFilter;
     }
 
-    public void setDocumentFilter(BiPredicate<JsonNode, JsonNode> documentFilter) {
-        this.documentFilter = documentFilter;
-    }
-
     public void setDocumentFilter(Predicate<JsonNode> documentFilter) {
         this.documentFilter = new IgnoreFirstPredicate(documentFilter);
+    }
+
+    public void setDocumentFilter(BiPredicate<JsonNode, JsonNode> documentFilter) {
+        this.documentFilter = documentFilter;
     }
 
     public BiConsumer<JsonNode, JsonNode> getConsumer() {
@@ -75,10 +75,10 @@ public class MongoScanner implements Callable<JsonNode> {
 
     @Override
     public JsonNode call() throws Exception {
-        ObjectNode result = JsonNodeFactory.instance.objectNode();
+        ObjectNode result = Json.newObject();
         try {
             List<CollectionScanner> scanners = getCollectionScanners();
-            ArrayNode stats = JsonNodeFactory.instance.arrayNode();
+            ArrayNode stats = Json.newArray();
             if (executor == null) {
                 for (CollectionScanner scanner : scanners) {
                     stats.add(scanner.call());
@@ -153,7 +153,7 @@ public class MongoScanner implements Callable<JsonNode> {
                         consumer.accept(collection, document);
                     }
                 }
-                ObjectNode result = JsonNodeFactory.instance.objectNode();
+                ObjectNode result = Json.newObject();
                 result.set("collection", collection);
                 result.put("count", count);
                 result.put("accept", accept);

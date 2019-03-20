@@ -6,7 +6,6 @@ import cc.whohow.db.rdbms.query.NamedQuery;
 import cc.whohow.db.rdbms.query.Rows;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,7 +17,7 @@ import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
 
 public class JdbcSynchronizer implements Callable<JsonNode> {
-    private static final Logger LOG = LoggerFactory.getLogger(JdbcSynchronizer.class);
+    private static final Logger log = LoggerFactory.getLogger(JdbcSynchronizer.class);
 
     private Map<String, Rdbms> dataSources;
     private Map<String, StatefulQuery> queries;
@@ -27,7 +26,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
 
     public JdbcSynchronizer(Map<String, DataSource> dataSources, List<StatefulQuery> queryList, ObjectNode context) {
         if (context == null || context.isNull() || context.isMissingNode()) {
-            context = JsonNodeFactory.instance.objectNode();
+            context = Json.newObject();
         }
         this.dataSources = new LinkedHashMap<>();
         for (Map.Entry<String, DataSource> e : dataSources.entrySet()) {
@@ -49,16 +48,16 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
     public JsonNode call() throws Exception {
         try {
             for (StatefulQuery query : queries.values()) {
-                LOG.debug("context:\n{}", context);
+                log.debug("context:\n{}", context);
                 run(query);
             }
-            LOG.debug("context:\n{}", context);
+            log.debug("context:\n{}", context);
             return context;
         } catch (Throwable e) {
-            LOG.error(e.getMessage(), e);
+            log.error(e.getMessage(), e);
             throw e;
         } finally {
-            LOG.debug("close");
+            log.debug("close");
             closeRunnable.run();
         }
     }
@@ -78,7 +77,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
 
         Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        LOG.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+        log.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
         try (Connection connection = dataSource.getDataSource().getConnection()) {
             try (PreparedStatement statement = connection.prepareStatement(namedQuery.getSQL(),
@@ -117,7 +116,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
 
         Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        LOG.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+        log.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
         try (Connection connection = dataSource.getDataSource().getConnection()) {
             connection.setAutoCommit(false);
@@ -142,7 +141,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
 
         Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        LOG.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+        log.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
         List<StatefulQuery> with = query.getWith().stream()
                 .map(queries::get)
@@ -174,17 +173,17 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
                         for (int i = 0; i < parameters.size(); i++) {
                             statement.setString(i + 1, parameters.get(i));
                         }
-                        LOG.debug("parameters: {}", parameters);
+                        log.debug("parameters: {}", parameters);
 
                         statement.addBatch();
                         count++;
                         if (count % 1000 == 0) {
-                            LOG.debug("execute: {}", count);
+                            log.debug("execute: {}", count);
                             statement.executeBatch();
                         }
                     }
                     if (count % 1000 != 0) {
-                        LOG.debug("execute: {}", count);
+                        log.debug("execute: {}", count);
                         statement.executeBatch();
                     }
 
@@ -200,7 +199,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
     private Rows withQuery(StatefulQuery query) throws SQLException {
         Rdbms dataSource = dataSources.get(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
-        LOG.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
+        log.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
         CloseRunnable closeRunnable = CloseRunnable.builder();
         try {

@@ -1,12 +1,12 @@
 package cc.whohow.db.cli;
 
 import cc.whohow.db.CloseRunnable;
+import cc.whohow.db.Json;
 import cc.whohow.db.rdbms.JdbcSynchronizer;
 import cc.whohow.db.rdbms.StatefulQuery;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.zaxxer.hikari.HikariDataSource;
 
@@ -59,7 +59,7 @@ public class JdbcSynchronizeTask implements Task {
             return (ObjectNode) context;
         }
         if (context.isNull() || context.isMissingNode()) {
-            return JsonNodeFactory.instance.objectNode();
+            return Json.newObject();
         }
         throw new IllegalArgumentException();
     }

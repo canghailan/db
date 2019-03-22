@@ -75,7 +75,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
             return;
         }
 
-        Rdbms dataSource = dataSources.get(query.getDataSource());
+        Rdbms dataSource = getDataSource(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         log.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
@@ -114,7 +114,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
             return;
         }
 
-        Rdbms dataSource = dataSources.get(query.getDataSource());
+        Rdbms dataSource = getDataSource(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         log.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
@@ -139,7 +139,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
             throw new UnsupportedOperationException("TODO");
         }
 
-        Rdbms dataSource = dataSources.get(query.getDataSource());
+        Rdbms dataSource = getDataSource(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         log.debug("run update: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
@@ -197,7 +197,7 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
     }
 
     private Rows withQuery(StatefulQuery query) throws SQLException {
-        Rdbms dataSource = dataSources.get(query.getDataSource());
+        Rdbms dataSource = getDataSource(query.getDataSource());
         NamedQuery namedQuery = new NamedQuery(query.getSql(), context);
         log.debug("run query: {}\n{}\n{}", query.getName(), namedQuery.getSQL(), namedQuery.getParameterNames());
 
@@ -235,6 +235,14 @@ public class JdbcSynchronizer implements Callable<JsonNode> {
                 .map(index::get)
                 .mapToInt(i -> (i == null) ? -1 : i)
                 .toArray();
+    }
+
+    private Rdbms getDataSource(String name) {
+        Rdbms dataSource = dataSources.get(name);
+        if (dataSource == null) {
+            throw new IllegalArgumentException("数据源" + name + "不存在");
+        }
+        return dataSource;
     }
 
     private String getAsString(String expression) {
